@@ -71,6 +71,9 @@ TEST(Controller, RejectsBadConfig) {
   EXPECT_THROW(Controller(ControllerConfig{0.5, 0.0, 0.005, 0.2}), std::invalid_argument);
   EXPECT_THROW(Controller(ControllerConfig{0.5, 1.0, 0.0, 0.2}), std::invalid_argument);
   EXPECT_THROW(Controller(ControllerConfig{0.5, 1.0, 0.005, 0.0}), std::invalid_argument);
+  EXPECT_THROW(Controller(ControllerConfig{0.5, 1.0, 0.005, 0.2, -1.0}), std::invalid_argument);
+  EXPECT_THROW(Controller(ControllerConfig{0.5, 1.0, 0.005, 0.2, 4.0, 0.0}), std::invalid_argument);
+  EXPECT_THROW(Controller(ControllerConfig{0.5, 1.0, 0.005, 0.2, 4.0, 1.5}), std::invalid_argument);
 }
 
 TEST(Controller, StartNeedsPathAndFreshPose) {

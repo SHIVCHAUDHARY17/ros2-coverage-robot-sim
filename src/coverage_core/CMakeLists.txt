@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(coverage_core VERSION 0.2.0 LANGUAGES CXX)
+project(coverage_core VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(coverage_core
   src/planner.cpp
-  src/controller.cpp)
+  src/controller.cpp
+  src/faults.cpp)
 target_include_directories(coverage_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -39,7 +40,7 @@ if(BUILD_TESTING)
   endif()
   include(GoogleTest)
 
-  foreach(t test_planner test_controller)
+  foreach(t test_planner test_controller test_faults)
     add_executable(${t} test/${t}.cpp)
     target_link_libraries(${t} PRIVATE coverage_core GTest::gtest_main)
     target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
