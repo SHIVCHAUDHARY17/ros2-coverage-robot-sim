@@ -10,7 +10,11 @@ water concrete removal). ROS 2 Jazzy, C++17 and Python, Docker, GitHub Actions.
 > **No hardware is involved.** Everything here runs in a 2D kinematic simulation with
 > injected sensor faults. Numbers below are measured in that simulation.
 
-![Operator UI during a run](docs/images/operator_ui.png)
+![Demo: the robot covers a spray-painted area; E-STOP from the browser, reset, continue to 100 %](docs/images/demo.gif)
+
+*Real recording of the simulation (sped up 2x): perception finds the painted area, the
+nozzle covers it, the operator presses E-STOP, resets and restarts, and it finishes at 100 %.
+Orange = sprayed outside the marking (see "Coverage vs. overspray" below).*
 
 ## What it does
 
