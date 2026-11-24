@@ -2,7 +2,7 @@ FROM ros:jazzy-ros-base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential cmake git libgtest-dev \
-      python3-colcon-common-extensions python3-pip \
+      python3-colcon-common-extensions python3-pip python3-pytest \
     && rm -rf /var/lib/apt/lists/*
 
 # Each rclcpp source file needs ~0.5-1 GB RAM to compile; the laptop's Docker VM
@@ -11,6 +11,7 @@ ENV MAKEFLAGS=-j2
 
 WORKDIR /ws
 COPY src/ src/
+COPY scripts/ scripts/
 
 # Build and test with the same commands you use locally.
 RUN . /opt/ros/jazzy/setup.sh && colcon build --event-handlers console_direct+ \
