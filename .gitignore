@@ -5,3 +5,6 @@ log/
 *.db3
 __pycache__/
 .venv/
+
+# Private notes (CV details) - never publish
+sitegeist-project-instructions.md
