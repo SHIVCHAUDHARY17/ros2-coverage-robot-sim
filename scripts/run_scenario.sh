@@ -19,9 +19,11 @@ mkdir -p outputs/bags outputs/reports
 BAGS_BEFORE=$(ls outputs/bags 2>/dev/null | wc -l)
 
 # Stop the robot like an operator pressing Ctrl+C (rosbag2 then finishes its file).
-# Escalate to SIGTERM / SIGKILL if it hangs, so CI can never get stuck here.
+# SIGINT goes to the launch process ONLY: it forwards it to every node itself
+# (signalling the whole group made each node get it twice -> hard kill).
+# Escalate to SIGTERM / SIGKILL on the group if it hangs, so CI never gets stuck.
 stop_launch() {
-  kill -INT -- "-$LAUNCH_PID" 2>/dev/null || true
+  kill -INT "$LAUNCH_PID" 2>/dev/null || true
   for _ in $(seq 1 30); do kill -0 "$LAUNCH_PID" 2>/dev/null || return 0; sleep 0.5; done
   echo "warning: launch still running after SIGINT, sending SIGTERM"
   kill -TERM -- "-$LAUNCH_PID" 2>/dev/null || true
