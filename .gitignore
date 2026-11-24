@@ -6,6 +6,7 @@ outputs/
 *.db3
 *.mcap
 __pycache__/
+.pytest_cache/
 .venv/
 
 # Private notes (CV details) - never publish

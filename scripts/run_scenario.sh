@@ -3,12 +3,14 @@
 # Runs INSIDE the container (CI and local):
 #   bash scripts/run_scenario.sh                     # clean sensors
 #   bash scripts/run_scenario.sh site_faults 99      # noisy/late/dropping sensor, min 99 % coverage
+#   bash scripts/run_scenario.sh "" 99 150 perception:=true   # target from the paint-marking image
 # Exit code 0 only if the path was completed with coverage >= threshold.
 set -euo pipefail
 
 SCENARIO="${1:-}"          # name of config/scenarios/<name>.yaml, empty = clean
 MIN_COVERAGE="${2:-99}"    # percent
 TIMEOUT="${3:-150}"        # seconds
+EXTRA_ARGS="${4:-}"        # extra launch arguments, e.g. "perception:=true"
 
 set +u
 source /opt/ros/jazzy/setup.bash
@@ -31,11 +33,12 @@ stop_launch() {
   kill -KILL -- "-$LAUNCH_PID" 2>/dev/null || true
 }
 
-echo "== launching (scenario='${SCENARIO:-clean}', min coverage ${MIN_COVERAGE} %)"
+echo "== launching (scenario='${SCENARIO:-clean}' ${EXTRA_ARGS}, min coverage ${MIN_COVERAGE} %)"
 # Job control on: in a script, background jobs otherwise IGNORE SIGINT (Ctrl+C),
 # and the launch would never shut down. With -m it gets its own process group.
 set -m
-ros2 launch coverage_nodes coverage.launch.py record:=true ${SCENARIO:+scenario:=$SCENARIO} \
+# shellcheck disable=SC2086  # EXTRA_ARGS is intentionally split into separate arguments
+ros2 launch coverage_nodes coverage.launch.py record:=true ${SCENARIO:+scenario:=$SCENARIO} $EXTRA_ARGS \
   > outputs/launch.log 2>&1 &
 LAUNCH_PID=$!
 set +m

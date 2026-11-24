@@ -25,16 +25,21 @@ jobs:
         run: docker build -t nozzle-coverage-robot .
       - name: Unit tests in container (GoogleTest + pytest)
         run: docker run --rm nozzle-coverage-robot
-      - name: Headless simulation with sensor faults (must reach 99 % coverage)
+      - name: "Headless simulation: sensor faults (must reach 99 % coverage)"
         run: >
           docker run --rm -v "${{ github.workspace }}/outputs:/ws/outputs"
           nozzle-coverage-robot bash scripts/run_scenario.sh site_faults 99
-      - name: Upload run report
+      - name: "Headless simulation: target from the paint-marking image (must reach 99 %)"
+        run: >
+          docker run --rm -v "${{ github.workspace }}/outputs:/ws/outputs"
+          nozzle-coverage-robot bash scripts/run_scenario.sh "" 99 150 perception:=true
+      - name: Upload run reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: run-report-site_faults
+          name: run-reports
           path: |
             outputs/reports/
+            outputs/perception/
             outputs/launch.log
           if-no-files-found: warn
