@@ -206,7 +206,38 @@ TEST(Controller, ClosedLoopRunCoversWholeTarget) {
   }
   EXPECT_EQ(l.ctrl.state(), State::IDLE);
   EXPECT_TRUE(l.ctrl.finished());
-  EXPECT_GE(map.fraction_of(g), 0.99);
+  EXPECT_DOUBLE_EQ(map.fraction_of(g), 1.0);  // every target cell treated
+}
+
+// Regression test: the first ROS run showed 99.5 % coverage because the nozzle
+// overshot the first corner by ~3 cm. While spraying, it must stay on its lane.
+TEST(Controller, StaysOnLaneWhileSpraying) {
+  Grid g(40, 30, 0.05, 1);
+  auto path = coverage::plan_coverage(g, PlannerConfig{0.25, 0.1});
+  Loop l{ControllerConfig{}};
+  l.ctrl.set_path(path);
+  l.ctrl.handle(Command::START, l.t);
+  double worst = 0.0;
+  for (int i = 0; i < 50000 && l.ctrl.state() == State::RUNNING; ++i) {
+    const std::size_t idx = l.ctrl.target_index();
+    if (l.tick().spray && idx < path.size())  // spray lanes are horizontal: y must match
+      worst = std::max(worst, std::abs(l.y - path[idx].y));
+  }
+  EXPECT_LT(worst, 0.005);  // < 5 mm off the lane centre line
+}
+
+TEST(Controller, RectangleIsCoveredCompletely) {
+  Grid g(40, 30, 0.05, 1);
+  const PlannerConfig pcfg{0.25, 0.1};
+  Loop l{ControllerConfig{}};
+  l.ctrl.set_path(coverage::plan_coverage(g, pcfg));
+  l.ctrl.handle(Command::START, l.t);
+  CoverageMap map(g.cols(), g.rows(), g.cell_size());
+  for (int i = 0; i < 50000 && l.ctrl.state() == State::RUNNING; ++i) {
+    const double px = l.x, py = l.y;
+    if (l.tick().spray) map.stamp_segment(px, py, l.x, l.y, pcfg.nozzle_width);
+  }
+  EXPECT_DOUBLE_EQ(map.fraction_of(g), 1.0);
 }
 
 TEST(Controller, NoNaNWhenExactlyOnLastWaypointWhileMoving) {

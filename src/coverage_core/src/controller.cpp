@@ -125,24 +125,42 @@ ControlOutput Controller::step(double now, double dt) {
   const double dx = target.x - x_, dy = target.y - y_;
   const double dist = std::hypot(dx, dy);
 
-  // Desired speed: cruise at max_speed, but brake (v = sqrt(2*a*d)) so we can
-  // stop at the waypoint, and never plan to jump past it within one cycle.
-  const double v_des = std::min({cfg_.max_speed, std::sqrt(2.0 * cfg_.max_accel * dist), dist / dt});
-  // Exactly on the target (but still too fast to finish): desired velocity is zero.
-  const double des_vx = dist > 1e-12 ? v_des * dx / dist : 0.0;
-  const double des_vy = dist > 1e-12 ? v_des * dy / dist : 0.0;
+  // Desired speed: cruise at max_speed, but brake so we can stop at the waypoint,
+  // and never plan to jump past it within one cycle.
+  // Braking curve v = sqrt(2*a*d) is the continuous-time formula. In a discrete
+  // loop with an acceleration limit the speed lags one cycle behind it and the
+  // nozzle overshoots corners (measured: ~3 cm, missed cells). So we brake using
+  // the distance that will be left AFTER this cycle's motion: d - |v|*dt.
+  const double d_brake = std::max(0.0, dist - std::hypot(vx_, vy_) * dt);
+  const double v_des =
+      std::min({cfg_.max_speed, std::sqrt(2.0 * cfg_.max_accel * d_brake), dist / dt});
+  const double dv_max = cfg_.max_accel * dt;  // velocity change allowed this cycle
 
-  // Acceleration limit on the velocity VECTOR: |v_new - v_old| <= max_accel * dt.
-  // This also limits how sharply the nozzle can turn at lane ends.
-  double dvx = des_vx - vx_, dvy = des_vy - vy_;
-  const double dv = std::hypot(dvx, dvy);
-  const double dv_max = cfg_.max_accel * dt;
-  if (dv > dv_max) {
-    dvx *= dv_max / dv;
-    dvy *= dv_max / dv;
+  if (dist <= 1e-12) {
+    // Exactly on the target but still too fast to finish: just brake.
+    const double v = std::hypot(vx_, vy_);
+    const double k = v > dv_max ? (v - dv_max) / v : 0.0;
+    vx_ *= k;
+    vy_ *= k;
+    return {vx_, vy_, target.spray};
   }
-  vx_ += dvx;
-  vy_ += dvy;
+
+  // Split the current velocity into "along the direction to the target" (u) and
+  // "sideways" (n). Sideways velocity makes the nozzle drift off its lane after a
+  // corner, so it is cancelled FIRST; only the remaining acceleration budget is
+  // used to speed up / slow down along the lane. Total |dv| stays <= dv_max.
+  const double ux = dx / dist, uy = dy / dist;  // unit vector to target
+  const double v_along = vx_ * ux + vy_ * uy;
+  const double v_side = -vx_ * uy + vy_ * ux;     // component along the left normal
+
+  const double d_side = std::clamp(-v_side, -dv_max, dv_max);
+  const double budget = std::sqrt(std::max(0.0, dv_max * dv_max - d_side * d_side));
+  const double d_along = std::clamp(v_des - v_along, -budget, budget);
+
+  const double new_along = v_along + d_along;
+  const double new_side = v_side + d_side;
+  vx_ = new_along * ux - new_side * uy;
+  vy_ = new_along * uy + new_side * ux;
 
   // Spray flag belongs to the segment that ENDS at the target waypoint.
   return {vx_, vy_, target.spray};
