@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>coverage_core</name>
+  <version>0.1.0</version>
+  <description>ROS-free coverage planning core (boustrophedon planner + coverage map)</description>
+  <maintainer email="shivchaudhary1716j@gmail.com">Shiv Jayant Chaudhary</maintainer>
+  <license>MIT</license>
+  <export>
+    <!-- Plain CMake package so colcon can build it without ament dependencies. -->
+    <build_type>cmake</build_type>
+  </export>
+</package>
