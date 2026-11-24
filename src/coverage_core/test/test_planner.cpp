@@ -34,6 +34,8 @@ TEST(Planner, RejectsBadConfig) {
   EXPECT_THROW(coverage::plan_coverage(g, PlannerConfig{0.0, 0.1}), std::invalid_argument);
   EXPECT_THROW(coverage::plan_coverage(g, PlannerConfig{0.2, 1.0}), std::invalid_argument);
   EXPECT_THROW(coverage::plan_coverage(g, PlannerConfig{0.2, -0.1}), std::invalid_argument);
+  EXPECT_THROW(coverage::plan_coverage(g, PlannerConfig{0.2, 0.1, -0.1}), std::invalid_argument);
+  EXPECT_THROW(coverage::plan_coverage(g, PlannerConfig{0.2, 0.1, 0.6}), std::invalid_argument);
 }
 
 TEST(Planner, FullRectangleIsFullyCovered) {
@@ -93,4 +95,29 @@ TEST(CoverageMap, StampMarksOnlyCellsInsideNozzleRadius) {
   map.stamp_segment(0.0, 0.55, 1.0, 0.55, 0.2);  // horizontal strip at y=0.55, +-0.1
   EXPECT_TRUE(map.covered(5, 5));   // centre y = 0.55
   EXPECT_FALSE(map.covered(5, 8));  // centre y = 0.85, outside
+}
+
+// Regression: lanes used to be spread over the whole GRID height, so for a target
+// in the middle of the image the outer lanes overhung it (found via the overspray
+// metric in the run report).
+TEST(Planner, LanesAreLaidOverTheTargetNotTheWholeGrid) {
+  Grid g(40, 30, 0.05);  // 2.0 m x 1.5 m grid ...
+  for (std::size_t r = 10; r < 20; ++r)
+    for (std::size_t c = 5; c < 35; ++c) g.set(c, r, true);  // ... target only y in [0.5, 1.0)
+  const PlannerConfig cfg{0.25, 0.1};
+  const auto path = coverage::plan_coverage(g, cfg);
+  ASSERT_FALSE(path.empty());
+  for (const auto& w : path) {
+    EXPECT_GE(w.y, 0.5 + cfg.nozzle_width / 2 - 1e-9);  // first lane's strip starts at the target
+    EXPECT_LE(w.y, 1.0 - cfg.nozzle_width / 2 + 1e-9);  // last lane's strip ends at the target
+  }
+  EXPECT_GE(coverage_achieved(g, path, cfg.nozzle_width), 0.999);
+}
+
+TEST(Planner, EdgeInsetStopsSprayRunsShortOfTheMarkedEdge) {
+  Grid g = full_grid(40, 30, 0.05);  // 2.0 m wide
+  const auto path = coverage::plan_coverage(g, PlannerConfig{0.25, 0.1, 0.25});
+  ASSERT_GE(path.size(), 2u);
+  EXPECT_NEAR(path[0].x, 0.25 * 0.25, 1e-9);        // starts 6.25 cm inside the left edge
+  EXPECT_NEAR(path[1].x, 2.0 - 0.25 * 0.25, 1e-9);  // ends 6.25 cm inside the right edge
 }

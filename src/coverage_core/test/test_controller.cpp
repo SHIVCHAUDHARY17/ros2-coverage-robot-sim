@@ -258,3 +258,31 @@ TEST(Controller, StateNames) {
   EXPECT_STREQ(coverage::to_string(State::ESTOP), "ESTOP");
   EXPECT_STREQ(coverage::to_string(State::FAULT), "FAULT");
 }
+
+// Coverage-vs-overspray trade-off on a round marking (slanted edges everywhere):
+// edge_inset 0.25 must keep 100 % coverage while spraying less outside the target.
+TEST(Controller, EdgeInsetCutsOversprayWithoutLosingCoverage) {
+  Grid g(40, 30, 0.05);
+  for (std::size_t r = 0; r < 30; ++r)
+    for (std::size_t c = 0; c < 40; ++c)
+      g.set(c, r, std::hypot((c + 0.5) * 0.05 - 1.0, (r + 0.5) * 0.05 - 0.75) < 0.6);
+  auto run = [&](double inset, double& overspray) {
+    const PlannerConfig pcfg{0.25, 0.1, inset};
+    Loop l{ControllerConfig{}};
+    l.ctrl.set_path(coverage::plan_coverage(g, pcfg));
+    l.ctrl.handle(Command::START, l.t);
+    CoverageMap map(g.cols(), g.rows(), g.cell_size());
+    for (int i = 0; i < 50000 && l.ctrl.state() == State::RUNNING; ++i) {
+      const double px = l.x, py = l.y;
+      if (l.tick().spray) map.stamp_segment(px, py, l.x, l.y, pcfg.nozzle_width);
+    }
+    overspray = 0;
+    for (std::size_t r = 0; r < g.rows(); ++r)
+      for (std::size_t c = 0; c < g.cols(); ++c) overspray += map.covered(c, r) && !g.at(c, r);
+    return map.fraction_of(g);
+  };
+  double over0 = 0, over25 = 0;
+  EXPECT_DOUBLE_EQ(run(0.0, over0), 1.0);
+  EXPECT_DOUBLE_EQ(run(0.25, over25), 1.0);
+  EXPECT_LT(over25, 0.85 * over0);  // at least 15 % less concrete sprayed by mistake
+}

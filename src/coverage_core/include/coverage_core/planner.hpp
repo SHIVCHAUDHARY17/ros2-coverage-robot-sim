@@ -40,6 +40,11 @@ class Grid {
 struct PlannerConfig {
   double nozzle_width = 0.2;  // metres, width of the treated strip
   double overlap = 0.1;       // 0..<1, fraction of width shared by adjacent lanes
+  // 0..0.5, fraction of nozzle_width by which each spray run stops short of the
+  // marked edge. 0 = nozzle CENTRE reaches the edge (full coverage, overspray up to
+  // w/2 past the edge); 0.5 = nozzle EDGE reaches the edge (little overspray, the
+  // corners of each lane may be missed). A coverage-vs-precision trade-off.
+  double edge_inset = 0.0;
 };
 
 // Boustrophedon ("lawn-mower") coverage over the target cells of `target`.

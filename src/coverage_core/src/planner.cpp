@@ -33,6 +33,8 @@ std::vector<Waypoint> plan_coverage(const Grid& target, const PlannerConfig& cfg
   if (cfg.nozzle_width <= 0.0) throw std::invalid_argument("nozzle_width must be > 0");
   if (cfg.overlap < 0.0 || cfg.overlap >= 1.0)
     throw std::invalid_argument("overlap must be in [0, 1)");
+  if (cfg.edge_inset < 0.0 || cfg.edge_inset > 0.5)
+    throw std::invalid_argument("edge_inset must be in [0, 0.5]");
 
   std::vector<Waypoint> path;
   if (target.count() == 0) return path;
@@ -42,17 +44,30 @@ std::vector<Waypoint> plan_coverage(const Grid& target, const PlannerConfig& cfg
   const double H = target.height();
   const double max_spacing = w * (1.0 - cfg.overlap);
 
+  // Vertical extent of the TARGET (not of the whole grid): lanes are laid over
+  // the marked area only, otherwise the outer lanes overhang it.
+  std::size_t r_min = target.rows(), r_max = 0;
+  for (std::size_t r = 0; r < target.rows(); ++r)
+    for (std::size_t c = 0; c < target.cols(); ++c)
+      if (target.at(c, r)) {
+        r_min = std::min(r_min, r);
+        r_max = std::max(r_max, r);
+      }
+  const double y0 = static_cast<double>(r_min) * cell;
+  const double Ht = static_cast<double>(r_max + 1) * cell - y0;
+
   // Lane centres. Lane k sweeps the band [y-w/2, y+w/2]. We choose the fewest
   // lanes whose spacing is <= max_spacing and then re-space them evenly so the
-  // first lane touches the bottom edge and the last touches the top edge.
+  // first lane touches the bottom of the target and the last touches its top.
   std::size_t n_lanes = 1;
-  if (H > w) n_lanes = static_cast<std::size_t>(std::ceil((H - w) / max_spacing - kEps)) + 1;
+  if (Ht > w) n_lanes = static_cast<std::size_t>(std::ceil((Ht - w) / max_spacing - kEps)) + 1;
   std::vector<double> lane_y(n_lanes);
   if (n_lanes == 1) {
-    lane_y[0] = H / 2.0;
+    lane_y[0] = y0 + Ht / 2.0;
   } else {
-    const double step = (H - w) / static_cast<double>(n_lanes - 1);
-    for (std::size_t k = 0; k < n_lanes; ++k) lane_y[k] = w / 2.0 + step * static_cast<double>(k);
+    const double step = (Ht - w) / static_cast<double>(n_lanes - 1);
+    for (std::size_t k = 0; k < n_lanes; ++k)
+      lane_y[k] = y0 + w / 2.0 + step * static_cast<double>(k);
   }
 
   bool left_to_right = true;
@@ -87,6 +102,10 @@ std::vector<Waypoint> plan_coverage(const Grid& target, const PlannerConfig& cfg
     for (const auto& run : runs) {
       double x_begin = static_cast<double>(run.first) * cell;
       double x_end = static_cast<double>(run.second) * cell;
+      // Stop short of the marked edge (edge_inset), but keep at least half the run.
+      const double inset = std::min(cfg.edge_inset * w, 0.25 * (x_end - x_begin));
+      x_begin += inset;
+      x_end -= inset;
       if (!left_to_right) std::swap(x_begin, x_end);
       // Travel (nozzle off) to the start of the run, then spray along it.
       path.push_back({x_begin, y, false});
