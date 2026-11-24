@@ -34,6 +34,8 @@ class RunData:
     spray: List[Tuple[float, bool]] = field(default_factory=list)
     states: List[Tuple[float, str]] = field(default_factory=list)
     coverage: List[Tuple[float, float]] = field(default_factory=list)  # (time, percent)
+    # last /coverage_grid: 0 not target, 25 sprayed outside target, 50 to treat, 100 treated
+    final_map: List[int] = field(default_factory=list)
 
 
 def state_transitions(states: Sequence[Tuple[float, str]]) -> List[Tuple[float, str]]:
@@ -113,6 +115,9 @@ def compute(run: RunData, gap_threshold: float = 0.1) -> Dict[str, object]:
         "target_cells": sum(run.target),
         "target_area_m2": sum(run.target) * run.resolution ** 2,
         "planned_path_m": planned,
+        # concrete sprayed OUTSIDE the marked area (on site: removed by mistake)
+        "overspray_m2": (sum(1 for v in run.final_map if v == 25) * run.resolution ** 2
+                         if run.final_map else None),
         "driven_spraying_m": dist["spraying_m"],
         "driven_travelling_m": dist["travelling_m"],
         "estops": sum(1 for _, s in changes if s == "ESTOP"),

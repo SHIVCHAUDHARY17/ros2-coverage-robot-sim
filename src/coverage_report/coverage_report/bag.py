@@ -47,4 +47,6 @@ def read_bag(uri: str) -> RunData:
             run.states.append((t, msg.data))
         elif topic == "/coverage_percent":
             run.coverage.append((t, float(msg.data)))
+        elif topic == "/coverage_grid":
+            run.final_map = list(msg.data)  # keep the last one = state at the end of the run
     return run

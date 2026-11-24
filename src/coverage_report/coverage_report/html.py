@@ -116,6 +116,7 @@ def render(run: RunData, m: Dict, title: str) -> str:
         ("Duration (start to complete)", _fmt(m["duration_s"], " s")),
         ("Target area", _fmt(m["target_area_m2"], " m²", 2) + f' ({m["target_cells"]} cells)'),
         ("Planned path", _fmt(m["planned_path_m"], " m", 2)),
+        ("Sprayed outside the marked area (overspray)", _fmt(m["overspray_m2"], " m²", 3)),
         ("Driven while spraying / travelling",
          _fmt(m["driven_spraying_m"], " m", 2) + " / " + _fmt(m["driven_travelling_m"], " m", 2)),
         ("E-stops / pauses", f'{m["estops"]} / {m["pauses"]}'),

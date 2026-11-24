@@ -7,7 +7,8 @@
 //                     what the nozzle REALLY treated, not what the noisy sensor claims)
 //       /spray_state  std_msgs/Bool (actual valve state from the sim)
 // Out:  /coverage_grid    nav_msgs/OccupancyGrid  (0 = not target, 50 = target still to treat,
-//                                                  100 = treated)
+//                                                  100 = treated, 25 = sprayed OUTSIDE the
+//                                                  target = overspray)
 //       /coverage_percent std_msgs/Float32        (0..100, share of target cells treated)
 
 #include <chrono>
@@ -81,7 +82,10 @@ class CoverageTrackerNode : public rclcpp::Node {
     g.data.resize(target_->cols() * target_->rows());
     for (std::size_t r = 0; r < target_->rows(); ++r)
       for (std::size_t c = 0; c < target_->cols(); ++c)
-        g.data[r * target_->cols() + c] = map_->covered(c, r) ? 100 : (target_->at(c, r) ? 50 : 0);
+      {
+        const bool target = target_->at(c, r), sprayed = map_->covered(c, r);
+        g.data[r * target_->cols() + c] = target ? (sprayed ? 100 : 50) : (sprayed ? 25 : 0);
+      }
     grid_pub_->publish(g);
 
     // Log at most every 5 s and only if the value changed, plus once on completion.

@@ -6,14 +6,18 @@
   ros__parameters:
     frame_id: map
     nozzle_width: 0.25        # m, width of the treated strip (planner AND tracker must agree)
+    grid_cols: 40             # 40 x 0.05 m = 2.0 m   (planner AND perception must agree)
+    grid_rows: 30             # 30 x 0.05 m = 1.5 m
+    cell_size: 0.05           # m
 
 planner_node:
   ros__parameters:
-    grid_cols: 40             # 40 x 0.05 m = 2.0 m
-    grid_rows: 30             # 30 x 0.05 m = 1.5 m
-    cell_size: 0.05           # m
+    target_source: shape      # "shape" (built-in) or "mask_topic" (from perception_node)
     target_shape: L           # "rect" or "L" (rectangle with top-right quarter removed)
     overlap: 0.1              # fraction of nozzle width shared by neighbouring lanes
+    edge_inset: 0.25          # 0..0.5 x nozzle width: stop spray runs short of the marked edge
+                              # (measured on the paint marking: 0 -> 0.39 m2 overspray,
+                              #  0.25 -> 0.27 m2, both 100 % coverage; 0.5 -> 98.9 %)
 
 controller_node:
   ros__parameters:
@@ -49,3 +53,20 @@ sim_node:
 coverage_tracker_node:
   ros__parameters:
     publish_hz: 2.0
+
+perception_node:              # only started with perception:=true
+  ros__parameters:
+    image_path: ""            # "" = synthetic sample image shipped with coverage_perception
+    overlay_dir: outputs/perception
+    sat_min: 100              # paint is saturated, concrete/stains are grey
+    val_min: 60
+    close_px: 9               # bridge spray gaps
+    open_px: 5                # remove speckle
+    min_area_frac: 0.005      # drop overspray blobs smaller than 0.5 % of the image
+    cell_min_fraction: 0.3    # cell is target if >= 30 % painted
+
+web_operator:                 # only started with web:=true
+  ros__parameters:
+    host: 0.0.0.0
+    port: 8080
+    command_timeout: 2.0      # s

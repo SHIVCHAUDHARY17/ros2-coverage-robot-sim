@@ -1,0 +1,6 @@
+# Loaded on top of params.yaml when launched with perception:=true.
+# Must name planner_node explicitly: a node-specific value in params.yaml would
+# otherwise win over a wildcard override (found while testing).
+planner_node:
+  ros__parameters:
+    target_source: mask_topic   # plan whatever coverage_perception finds on /target_mask

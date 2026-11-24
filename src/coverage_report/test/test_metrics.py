@@ -99,3 +99,11 @@ def test_latency_shows_up_only_in_error_at_arrival():
     s = metrics.compute(run)["sensor"]
     assert s["rms_error_mm"] == pytest.approx(0.0)
     assert s["rms_error_at_arrival_mm"] > 50.0
+
+
+def test_overspray_area_from_final_map():
+    run = straight_run()
+    run.final_map = [100, 100, 25, 25, 25, 50, 0, 0]  # 3 cells sprayed outside the target
+    assert metrics.compute(run)["overspray_m2"] == pytest.approx(3 * 0.5 * 0.5)
+    run.final_map = []
+    assert metrics.compute(run)["overspray_m2"] is None  # no map recorded: unknown, not zero
