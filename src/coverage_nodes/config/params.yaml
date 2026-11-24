@@ -1,0 +1,36 @@
+# All tunable values for the coverage robot simulation (no hardcoded numbers in nodes).
+# "/**" applies to every node: shared values are defined once here.
+/**:
+  ros__parameters:
+    frame_id: map
+    nozzle_width: 0.25        # m, width of the treated strip (planner AND tracker must agree)
+
+planner_node:
+  ros__parameters:
+    grid_cols: 40             # 40 x 0.05 m = 2.0 m
+    grid_rows: 30             # 30 x 0.05 m = 1.5 m
+    cell_size: 0.05           # m
+    target_shape: L           # "rect" or "L" (rectangle with top-right quarter removed)
+    overlap: 0.1              # fraction of nozzle width shared by neighbouring lanes
+
+controller_node:
+  ros__parameters:
+    rate_hz: 50.0
+    max_speed: 0.5            # m/s
+    max_accel: 1.0            # m/s^2
+    goal_tolerance: 0.005     # m
+    watchdog_timeout: 0.2     # s, max age of /nozzle_pose before FAULT
+    auto_start: true          # start as soon as path + fresh pose are available (headless demo)
+
+sim_node:
+  ros__parameters:
+    rate_hz: 50.0
+    cmd_timeout: 0.2          # s, gantry stops if /cmd_vel goes quiet
+    start_x: 0.0
+    start_y: 0.0
+    workspace_x: 2.0          # m, gantry travel limits
+    workspace_y: 1.5
+
+coverage_tracker_node:
+  ros__parameters:
+    publish_hz: 2.0

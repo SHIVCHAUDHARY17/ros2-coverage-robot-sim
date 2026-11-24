@@ -1,8 +1,10 @@
 build/
 install/
 log/
+outputs/
 *.bag
 *.db3
+*.mcap
 __pycache__/
 .venv/
 

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>coverage_nodes</name>
+  <version>0.1.0</version>
+  <description>ROS 2 nodes for the simulation-only coverage robot: planner, controller, kinematic sim, coverage tracker</description>
+  <maintainer email="shivchaudhary1716j@gmail.com">Shiv Jayant Chaudhary</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>coverage_core</depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
