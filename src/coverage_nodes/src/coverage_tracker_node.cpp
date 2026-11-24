@@ -3,7 +3,8 @@
 // previous pose to the new one is stamped into a coverage::CoverageMap.
 //
 // In:   /target_grid  nav_msgs/OccupancyGrid (latched, from planner_node)
-//       /nozzle_pose  geometry_msgs/PoseStamped
+//       /nozzle_pose_true geometry_msgs/PoseStamped (ground truth from the sim: coverage is
+//                     what the nozzle REALLY treated, not what the noisy sensor claims)
 //       /spray_state  std_msgs/Bool (actual valve state from the sim)
 // Out:  /coverage_grid    nav_msgs/OccupancyGrid  (0 = not target, 50 = target still to treat,
 //                                                  100 = treated)
@@ -36,7 +37,7 @@ class CoverageTrackerNode : public rclcpp::Node {
     spray_sub_ = create_subscription<std_msgs::msg::Bool>(
         "spray_state", 10, [this](std_msgs::msg::Bool::ConstSharedPtr msg) { spray_ = msg->data; });
     pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
-        "nozzle_pose", 10,
+        "nozzle_pose_true", 10,
         [this](geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) { on_pose(*msg); });
 
     timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(

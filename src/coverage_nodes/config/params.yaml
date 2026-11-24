@@ -1,5 +1,7 @@
 # All tunable values for the coverage robot simulation (no hardcoded numbers in nodes).
 # "/**" applies to every node: shared values are defined once here.
+# Scenario files in config/scenarios/ are loaded ON TOP of this file and only
+# list what they change (see launch/coverage.launch.py, argument scenario:=<name>).
 /**:
   ros__parameters:
     frame_id: map
@@ -20,7 +22,11 @@ controller_node:
     max_accel: 1.0            # m/s^2
     goal_tolerance: 0.005     # m
     watchdog_timeout: 0.2     # s, max age of /nozzle_pose before FAULT
+    lateral_gain: 4.0         # 1/s, how hard the nozzle steers back onto its lane
+    pose_filter_alpha: 0.3    # (0,1], trust in a new measurement vs own prediction (1 = raw)
     auto_start: true          # start as soon as path + fresh pose are available (headless demo)
+    auto_recover: false       # simulation tests only: RESET+START automatically after a FAULT
+    max_auto_recoveries: 3
 
 sim_node:
   ros__parameters:
@@ -30,6 +36,15 @@ sim_node:
     start_y: 0.0
     workspace_x: 2.0          # m, gantry travel limits
     workspace_y: 1.5
+    fault:                    # sensor channel faults, all off = clean sensor
+      noise_std: 0.0          # m
+      vibration_amp: 0.0      # m
+      vibration_hz: 0.0       # Hz
+      latency: 0.0            # s
+      drop_prob: 0.0          # 0..1 per message
+      outage_rate: 0.0        # blackouts per second
+      outage_duration: 0.0    # s per blackout
+      seed: 42                # same seed = same faults (reproducible runs)
 
 coverage_tracker_node:
   ros__parameters:

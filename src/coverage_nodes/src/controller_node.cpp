@@ -7,7 +7,12 @@
 // Out:  /cmd_vel        geometry_msgs/Twist  (linear.x / linear.y in m/s)
 //       /spray_cmd      std_msgs/Bool        (nozzle valve command)
 //       /controller_state std_msgs/String    (IDLE/RUNNING/PAUSED/ESTOP/FAULT[: reason])
+//       /nozzle_pose_est geometry_msgs/PoseStamped (fused position estimate it steers with)
 // Services (std_srvs/Trigger): /start /pause /resume /estop /reset
+//
+// auto_recover (default false): after a FAULT, automatically RESET + START once
+// the sensor is back, at most max_auto_recoveries times. Meant for unattended
+// SIMULATION tests; on a real machine an operator should decide to restart.
 
 #include <chrono>
 #include <functional>
@@ -30,19 +35,25 @@ class ControllerNode : public rclcpp::Node {
   ControllerNode() : Node("controller_node"), ctrl_(load_config()) {
     const double rate_hz = declare_parameter<double>("rate_hz", 50.0);
     auto_start_ = declare_parameter<bool>("auto_start", false);
+    auto_recover_ = declare_parameter<bool>("auto_recover", false);
+    max_recoveries_ = declare_parameter<int>("max_auto_recoveries", 3);
+    frame_ = declare_parameter<std::string>("frame_id", "map");
     dt_ = 1.0 / rate_hz;
 
     cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
     spray_pub_ = create_publisher<std_msgs::msg::Bool>("spray_cmd", 10);
     state_pub_ = create_publisher<std_msgs::msg::String>("controller_state", 10);
+    est_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>("nozzle_pose_est", 10);
 
     path_sub_ = create_subscription<nav_msgs::msg::Path>(
         "coverage_path", rclcpp::QoS(1).transient_local().reliable(),
         [this](nav_msgs::msg::Path::ConstSharedPtr msg) { on_path(*msg); });
     pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
         "nozzle_pose", 10, [this](geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
-          // Watchdog is kicked with the ARRIVAL time: a late message counts as late.
-          ctrl_.update_pose(msg->pose.position.x, msg->pose.position.y, now().seconds());
+          // Watchdog is kicked with the ARRIVAL time (a late message counts as late);
+          // the header stamp (capture time) is used for latency compensation.
+          ctrl_.update_pose(msg->pose.position.x, msg->pose.position.y, now().seconds(),
+                            rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()).seconds());
         });
 
     add_command("start", coverage::Command::START);
@@ -65,6 +76,8 @@ class ControllerNode : public rclcpp::Node {
     c.max_accel = declare_parameter<double>("max_accel", c.max_accel);
     c.goal_tolerance = declare_parameter<double>("goal_tolerance", c.goal_tolerance);
     c.watchdog_timeout = declare_parameter<double>("watchdog_timeout", c.watchdog_timeout);
+    c.lateral_gain = declare_parameter<double>("lateral_gain", c.lateral_gain);
+    c.pose_filter_alpha = declare_parameter<double>("pose_filter_alpha", c.pose_filter_alpha);
     return c;  // Controller's constructor validates (throws on bad values)
   }
 
@@ -100,6 +113,16 @@ class ControllerNode : public rclcpp::Node {
       if (auto_started_) RCLCPP_INFO(get_logger(), "Auto-start: RUNNING");
     }
 
+    if (auto_recover_ && ctrl_.state() == coverage::State::FAULT &&
+        recoveries_ < max_recoveries_ && ctrl_.feedback_fresh(t)) {
+      const std::string reason = ctrl_.fault_reason();
+      if (ctrl_.handle(coverage::Command::RESET, t) && ctrl_.handle(coverage::Command::START, t)) {
+        ++recoveries_;
+        RCLCPP_WARN(get_logger(), "Auto-recovery %d/%d after FAULT (%s): continuing from waypoint %zu",
+                    recoveries_, max_recoveries_, reason.c_str(), ctrl_.target_index());
+      }
+    }
+
     const auto out = ctrl_.step(t, dt_);
 
     geometry_msgs::msg::Twist cmd;
@@ -109,6 +132,14 @@ class ControllerNode : public rclcpp::Node {
     std_msgs::msg::Bool spray;
     spray.data = out.spray;
     spray_pub_->publish(spray);
+
+    geometry_msgs::msg::PoseStamped est;
+    est.header.stamp = now();
+    est.header.frame_id = frame_;
+    est.pose.position.x = ctrl_.est_x();
+    est.pose.position.y = ctrl_.est_y();
+    est.pose.orientation.w = 1.0;
+    est_pub_->publish(est);
 
     publish_state(t);
   }
@@ -132,13 +163,15 @@ class ControllerNode : public rclcpp::Node {
 
   coverage::Controller ctrl_;
   double dt_ = 0.02;
-  bool auto_start_ = false, auto_started_ = false;
-  std::string last_state_;
+  bool auto_start_ = false, auto_started_ = false, auto_recover_ = false;
+  int max_recoveries_ = 3, recoveries_ = 0;
+  std::string last_state_, frame_;
   double last_state_pub_ = 0.0;
 
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr spray_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr est_pub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   std::vector<rclcpp::Service<Trigger>::SharedPtr> services_;

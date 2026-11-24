@@ -1,0 +1,19 @@
+# Scenario "site_faults": what a construction site does to a clean sensor signal.
+# Loaded on top of params.yaml:  ros2 launch coverage_nodes coverage.launch.py scenario:=site_faults
+# Used by CI: the run must still reach the coverage threshold (scripts/run_scenario.sh).
+sim_node:
+  ros__parameters:
+    fault:
+      noise_std: 0.003        # 3 mm sensor noise (dust, measurement noise)
+      vibration_amp: 0.002    # 2 mm ...
+      vibration_hz: 8.0       # ... at 8 Hz machine vibration
+      latency: 0.04           # 40 ms late (slow bus / network)
+      drop_prob: 0.1          # 10 % of measurements lost
+      outage_rate: 0.05       # a blackout every ~20 s on average ...
+      outage_duration: 0.35   # ... longer than the 0.2 s watchdog: forces FAULT + recovery
+      seed: 7
+
+controller_node:
+  ros__parameters:
+    auto_recover: true        # unattended test run: no operator to press RESET
+    max_auto_recoveries: 5
