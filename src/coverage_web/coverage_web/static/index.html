@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coverage robot – operator (simulation)</title>
+<style>
+  :root { --bg:#f6f8fa; --card:#fff; --ink:#1f2328; --muted:#57606a; --line:#d0d7de;
+          --blue:#1f6feb; --pending:#dde6f0; --over:#f0b429; --red:#cf222e; --green:#1a7f37; --amber:#9a6700; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:.8rem; padding:.8rem 1.2rem; background:var(--card); border-bottom:1px solid var(--line); }
+  header h1 { font-size:1.05rem; margin:0; font-weight:600; }
+  .tag { font-size:.75rem; color:var(--muted); border:1px solid var(--line); border-radius:1rem; padding:.05rem .55rem; }
+  .link { margin-left:auto; font-size:.8rem; color:var(--muted); }
+  .dot { display:inline-block; width:.6rem; height:.6rem; border-radius:50%; background:var(--red); margin-right:.3rem; }
+  .dot.on { background:var(--green); }
+  main { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:1rem; padding:1rem 1.2rem; max-width:1100px; margin:0 auto; }
+  @media (max-width:800px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1rem; }
+  canvas { width:100%; height:auto; display:block; border-radius:4px; background:#fff; }
+  .state { font-size:1.4rem; font-weight:700; margin:.2rem 0 .1rem; }
+  .state.RUNNING { color:var(--green); } .state.PAUSED, .state.IDLE { color:var(--amber); }
+  .state.ESTOP, .state.FAULT { color:var(--red); }
+  .detail { color:var(--muted); font-size:.85rem; min-height:1.2em; }
+  .big { font-size:2.2rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .bar { height:.5rem; background:var(--pending); border-radius:.25rem; overflow:hidden; margin:.3rem 0 1rem; }
+  .bar > div { height:100%; width:0; background:var(--blue); transition:width .25s; }
+  .buttons { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+  button { font:inherit; font-weight:600; padding:.65rem; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button:hover { background:#f3f4f6; }
+  button.estop { grid-column:1 / -1; background:var(--red); color:#fff; border-color:#a40e26; font-size:1.15rem; padding:1rem; letter-spacing:.05em; }
+  button.estop:hover { background:#a40e26; }
+  .log { font-size:.8rem; color:var(--muted); margin-top:.8rem; min-height:1.2em; }
+  .legend { font-size:.78rem; color:var(--muted); display:flex; gap:1rem; margin-top:.5rem; flex-wrap:wrap; }
+  .sw { display:inline-block; width:.8rem; height:.8rem; vertical-align:-1px; margin-right:.25rem; border-radius:2px; }
+  .note { font-size:.75rem; color:var(--muted); margin-top:1rem; line-height:1.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Coverage robot – operator</h1>
+  <span class="tag">simulation only</span>
+  <span class="link"><span id="dot" class="dot"></span><span id="conn">connecting…</span></span>
+</header>
+<main>
+  <section class="card">
+    <canvas id="map" width="800" height="600" aria-label="coverage map"></canvas>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--pending)"></span>to treat</span>
+      <span><span class="sw" style="background:var(--blue)"></span>treated</span>
+      <span><span class="sw" style="background:var(--over)"></span>sprayed outside marking</span>
+      <span><span class="sw" style="border:1px dashed #57606a"></span>planned path</span>
+      <span><span class="sw" style="background:var(--red);border-radius:50%"></span>nozzle (controller estimate)</span>
+    </div>
+  </section>
+  <aside class="card">
+    <div class="detail">Controller state</div>
+    <div id="state" class="state">–</div>
+    <div id="detail" class="detail"></div>
+    <div class="detail" style="margin-top:1rem">Coverage</div>
+    <div class="big"><span id="cov">0.0</span> %</div>
+    <div class="bar"><div id="bar"></div></div>
+    <div class="buttons">
+      <button data-cmd="start">Start</button>
+      <button data-cmd="reset">Reset</button>
+      <button data-cmd="pause">Pause</button>
+      <button data-cmd="resume">Resume</button>
+      <button class="estop" data-cmd="estop">E-STOP</button>
+    </div>
+    <div id="log" class="log"></div>
+    <p class="note">Software e-stop for the simulation. On a real machine the e-stop is a
+      hard-wired safety circuit; a web button is never a safety function.</p>
+  </aside>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const cv = $("map"), ctx = cv.getContext("2d");
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function draw(s) {
+  const g = s.grid;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!g) { ctx.fillStyle = css("--muted"); ctx.fillText("waiting for coverage map…", 20, 30); return; }
+  const W = g.w * g.res, H = g.h * g.res, k = Math.min(cv.width / W, cv.height / H);
+  const X = (x) => x * k, Y = (y) => cv.height - y * k;          // metres -> canvas, y up
+  const cell = g.res * k;
+  for (let r = 0; r < g.h; r++) for (let c = 0; c < g.w; c++) {
+    const v = g.cells[r * g.w + c];
+    if (v === "0") continue;
+    ctx.fillStyle = v === "2" ? css("--blue") : v === "3" ? css("--over") : css("--pending");
+    ctx.fillRect(X(c * g.res), Y((r + 1) * g.res), cell + 0.5, cell + 0.5);
+  }
+  if (s.path && s.path.length > 1) {
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = "#57606a"; ctx.lineWidth = 1; ctx.beginPath();
+    s.path.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])));
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (s.pose) {
+    ctx.fillStyle = css("--red"); ctx.beginPath();
+    ctx.arc(X(s.pose[0]), Y(s.pose[1]), 7, 0, 2 * Math.PI); ctx.fill();
+  }
+}
+
+function render(s) {
+  const [name, ...rest] = (s.state || "–").split(": ");
+  $("state").textContent = name; $("state").className = "state " + name;
+  $("detail").textContent = rest.join(": ");
+  $("cov").textContent = (s.coverage || 0).toFixed(1);
+  $("bar").style.width = Math.min(100, s.coverage || 0) + "%";
+  $("dot").className = "dot" + (s.connected ? " on" : "");
+  $("conn").textContent = s.connected ? "robot connected" : "no data from robot";
+  draw(s);
+}
+
+function connect() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onmessage = (e) => render(JSON.parse(e.data));
+  ws.onclose = () => { $("dot").className = "dot"; $("conn").textContent = "reconnecting…"; setTimeout(connect, 1000); };
+}
+
+document.querySelectorAll("button[data-cmd]").forEach((b) => b.addEventListener("click", async () => {
+  const cmd = b.dataset.cmd;
+  $("log").textContent = cmd + " …";
+  try {
+    const r = await (await fetch("/api/command/" + cmd, { method: "POST" })).json();
+    $("log").textContent = `${cmd}: ${r.message}`;
+  } catch (err) { $("log").textContent = `${cmd}: request failed (${err})`; }
+}));
+
+connect();
+</script>
+</body>
+</html>
